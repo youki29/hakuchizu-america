@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>白地図ワーク 南北アメリカ</title>
+<meta name="robots" content="noindex">
+<style>
+  :root {
+    --bg: #f6f5f1; --card: #fff; --ink: #222; --sub: #6b6b6b; --line: #e2dfd6;
+    --accent: #2f6fdb; --cover: #2f6fdb;
+    --sea: #dcebf5; --land: #fbfaf6; --border: #9a9a9a; --hl: #ffe3a3;
+    --mountain: #9b5a2e; --plateau: #9b6fd0; --plain: #79c27a; --desert: #f2cf4a;
+    --river: #2b7bd6; --current: #e0453a;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    -webkit-tap-highlight-color: transparent; }
+  header { position: sticky; top: 0; z-index: 10; background: var(--bg);
+    padding: 10px 16px 8px; border-bottom: 1px solid var(--line); }
+  h1 { font-size: 17px; margin: 0 0 8px; }
+  .tabs { display: flex; gap: 6px; }
+  .tab { flex: 1; padding: 9px 6px; border: 1px solid var(--line); border-radius: 10px;
+    background: var(--card); font-size: 14px; font-weight: 600; color: var(--sub); cursor: pointer; }
+  .tab.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .cats { display: flex; gap: 6px; margin-top: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+  .cats::-webkit-scrollbar { display: none; }
+  .cat { flex: none; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line);
+    background: var(--card); font-size: 13px; cursor: pointer; color: var(--ink); white-space: nowrap; }
+  .cat.on { background: var(--ink); border-color: var(--ink); color: #fff; }
+  .cat i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: 0; }
+  .tools { display: flex; gap: 6px; margin-top: 8px; }
+  .tools button { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line);
+    background: var(--card); font-size: 13px; cursor: pointer; color: var(--ink); }
+  .tools .count { margin-left: auto; font-size: 13px; color: var(--sub); align-self: center; }
+  main { max-width: 900px; margin: 0 auto; padding: 12px 16px 60px; }
+
+  .map { position: relative; user-select: none; -webkit-user-select: none; }
+  .map svg { display: block; width: 100%; height: auto; border-radius: 10px; background: var(--sea);
+    box-shadow: 0 1px 4px rgba(0,0,0,.12); }
+  .country { fill: var(--land); }
+  .country.hl { fill: var(--hl); }
+  .borders { fill: none; stroke: var(--border); stroke-width: .7; }
+  .coast { fill: none; stroke: #7a8b99; stroke-width: .9; }
+  .grat { fill: none; stroke: #b9cfdf; stroke-width: .6; stroke-dasharray: 3 3; }
+  .mline { fill: none; stroke: var(--mountain); stroke-width: 11; stroke-linecap: round; stroke-linejoin: round; opacity: .75; }
+  .area { stroke: none; opacity: .55; }
+  .area.plateau { fill: var(--plateau); } .area.plain { fill: var(--plain); } .area.desert { fill: var(--desert); opacity: .75; }
+  .river { fill: none; stroke: var(--river); stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
+  .current { fill: none; stroke: var(--current); stroke-width: 6; stroke-linecap: round; opacity: .7; }
+  .meridian { fill: none; stroke: #c0392b; stroke-width: 2; stroke-dasharray: 8 5; }
+  .meridian.solid { stroke-dasharray: none; stroke-width: 2.4; }
+  .city { fill: #fff; stroke: #222; stroke-width: 2; }
+
+  .ctx { position: absolute; transform: translate(-50%, -50%); font-size: clamp(8px, 1.7vw, 13px);
+    color: #8a8a8a; white-space: nowrap; pointer-events: none; letter-spacing: .05em; }
+  .ctx.red { color: #c0392b; font-weight: 700; }
+  .ctx.sea { color: #6d93b3; font-style: italic; }
+  .pin { position: absolute; transform: translate(-50%, -50%); border: none; padding: 0; cursor: pointer;
+    background: transparent; width: clamp(26px, 5vw, 36px); aspect-ratio: 1; }
+  .pin .mk { position: absolute; inset: 15%; display: grid; place-items: center; border-radius: 5px;
+    background: #fff; border: 1.5px solid #333; color: #222; font-weight: 700;
+    font-size: clamp(9px, 1.9vw, 14px); line-height: 1; }
+  .pin.country .mk { border-radius: 50%; background: #222; color: #fff; border-color: #222; }
+  .pin.city .mk { border-radius: 50%; }
+  .pin.city { margin-left: clamp(12px, 2.6vw, 18px); }
+  .pin.open .mk { background: #d62828; border-color: #d62828; color: #fff; }
+  .pin .bub { position: absolute; left: 50%; top: 88%; transform: translateX(-50%);
+    white-space: nowrap; background: rgba(214, 40, 40, .95); color: #fff; z-index: 2;
+    font-size: clamp(10px, 2vw, 15px); font-weight: 700; padding: 2px 6px; border-radius: 6px;
+    pointer-events: none; box-shadow: 0 1px 3px rgba(0,0,0,.3); display: none; }
+  .pin.open { z-index: 3; }
+  .pin.open .bub { display: block; }
+  .hint { font-size: 12px; color: var(--sub); margin: 6px 2px 14px; }
+
+  section { margin-top: 18px; }
+  h2 { font-size: 15px; margin: 0 0 8px; display: flex; align-items: center; gap: 8px; }
+  h2 small { font-weight: 400; color: var(--sub); font-size: 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 6px; }
+  .row { display: flex; align-items: center; gap: 8px; background: var(--card);
+    border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; cursor: pointer; min-height: 44px; }
+  .key { flex: none; min-width: 28px; height: 28px; display: grid; place-items: center;
+    border-radius: 8px; background: #efece4; font-weight: 700; font-size: 15px; padding: 0 4px; }
+  .ans { flex: 1; min-width: 0; position: relative; font-size: 14px; line-height: 1.3; font-weight: 600;
+    min-height: 26px; display: flex; align-items: center; }
+  .ans .cover { position: absolute; inset: 0; border-radius: 6px; background: var(--cover);
+    color: #fff; font-size: 12px; font-weight: 500; display: grid; place-items: center; transition: opacity .15s; }
+  .row.open .cover { opacity: 0; pointer-events: none; }
+  .q { grid-column: 1 / -1; background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px 12px; font-size: 14px; line-height: 1.6; }
+  footer { text-align: center; font-size: 11px; color: var(--sub); margin-top: 30px; }
+  footer a { color: inherit; }
+</style>
+</head>
+<body>
+<header>
+  <h1>白地図ワーク 南北アメリカ</h1>
+  <div class="tabs" id="tabs"></div>
+  <div class="cats" id="cats"></div>
+  <div class="tools">
+    <button id="hideAll">ぜんぶ隠す</button>
+    <button id="showAll">ぜんぶ見せる</button>
+    <span class="count" id="count"></span>
+  </div>
+</header>
+<main id="main"></main>
+<footer>地図データ: <a href="https://www.naturalearthdata.com/">Natural Earth</a></footer>
+
+<script src="vendor/d3.min.js"></script>
+<script src="vendor/topojson-client.min.js"></script>
+<script>
+const CATS = {
+  country: { name: "国名", color: "#222" },
+  city: { name: "都市", color: "#fff" },
+  mountain: { name: "山脈", color: "var(--mountain)" },
+  land: { name: "高原・平原・砂漠", color: "var(--plain)" },
+  water: { name: "海・湾・湖・海峡", color: "var(--sea)" },
+  river: { name: "川", color: "var(--river)" },
+  peninsula: { name: "半島・諸島・地峡", color: "var(--hl)" },
+  line: { name: "経緯度", color: "#c0392b" },
+  question: { name: "問い", color: "#fff" },
+};
+
+// 座標はすべて [経度, 緯度]
+// shape: m=山脈, a=範囲(kind: plateau/plain/desert), r=川, c=海流, lon=経線, lat=緯線, city=都市の点
+const PAGES = [
+  {
+    id: "anglo", title: "⑩ アングロアメリカ",
+    proj: { type: "geoConicConformal", rotate: [100, 0], parallels: [30, 60], extent: [[-150, 23], [-55, 68]] },
+    ctx: [["メキシコ", -102, 24], ["キューバ", -79, 21.6], ["ロシア", -172, 66],
+      ["太平洋", -137, 38, 1], ["大西洋", -58, 34, 1], ["北極海", -120, 74, 1]],
+    items: [
+      { cat: "line", key: "a)", ans: "西経100°", at: [-100, 66], lon: -100 },
+      { cat: "line", key: "b)", ans: "北緯49°", at: [-133, 49], lat: 49 },
+      { cat: "line", key: "c)", ans: "北緯37°", at: [-130, 37], lat: 37 },
+
+      { cat: "water", key: "あ", ans: "ボーフォート海", at: [-131, 68.4] },
+      { cat: "water", key: "い", ans: "ハドソン湾", at: [-85, 59] },
+      { cat: "water", key: "う", ans: "メキシコ湾", at: [-90, 25] },
+      { cat: "mountain", key: "え", ans: "ロッキー山脈", at: [-113, 47],
+        m: [[-140, 64], [-132, 60], [-125, 55.5], [-118, 51], [-112, 46], [-108, 41], [-106, 36], [-105, 32]] },
+      { cat: "mountain", key: "お", ans: "シエラネヴァダ山脈", at: [-118.3, 36.4],
+        m: [[-121.3, 40.6], [-119.8, 38.4], [-118.4, 36.4], [-117.8, 35.2]] },
+      { cat: "mountain", key: "か", ans: "アパラチア山脈", at: [-80, 38],
+        m: [[-86, 34], [-83, 36], [-80, 38], [-77, 40.5], [-74, 42.5], [-71, 44.5], [-68, 46.5]] },
+      { cat: "land", key: "き", ans: "ラブラドル高原", at: [-68, 55], kind: "plateau",
+        a: [[-78, 55], [-72, 58.3], [-64, 58.5], [-60, 55], [-64, 52], [-72, 51.5]] },
+      { cat: "land", key: "く", ans: "ローレンシア台地", at: [-82, 49], kind: "plateau",
+        a: [[-93, 50.5], [-84, 51.5], [-76, 50.5], [-72, 48.3], [-79, 46.8], [-89, 47.8]] },
+      { cat: "land", key: "け", ans: "グレートプレーンズ", at: [-103.5, 42], kind: "plain",
+        a: [[-113, 53], [-105, 53], [-101, 46], [-99.5, 38], [-99.5, 32], [-102, 30], [-105, 35], [-107, 42], [-110.5, 48]] },
+      { cat: "land", key: "こ", ans: "プレーリー", at: [-97, 41], kind: "plain",
+        a: [[-100.5, 51], [-96.5, 50.5], [-95, 44], [-95, 37], [-97, 32.5], [-98.8, 33], [-98.8, 40], [-100, 46]] },
+      { cat: "land", key: "さ", ans: "中央平原", at: [-89.5, 38.5], kind: "plain",
+        a: [[-93.5, 45], [-88, 44.5], [-84.5, 41], [-84.5, 36], [-88, 32.5], [-91, 30.8], [-93.5, 35], [-94, 40]] },
+      { cat: "peninsula", key: "し", ans: "フロリダ半島", at: [-81.5, 28] },
+      { cat: "peninsula", key: "す", ans: "カリフォルニア半島", at: [-112.8, 27.5] },
+      { cat: "river", key: "せ", ans: "リオグランデ川", at: [-103, 29.4],
+        r: [[-106.6, 37.5], [-106.7, 35], [-106.9, 32.5], [-104.5, 29.8], [-102.6, 29.7], [-101, 29.5], [-99.5, 27.5], [-97.2, 25.9]] },
+      { cat: "river", key: "そ", ans: "コロラド川", at: [-111.6, 36.6],
+        r: [[-105.8, 40.3], [-108.5, 39.1], [-110, 38.2], [-111.5, 36.9], [-112.5, 36.1], [-114, 36], [-114.6, 34.5], [-114.7, 32.7], [-114.8, 31.8]] },
+      { cat: "river", key: "た", ans: "コロンビア川", at: [-119.5, 46.5],
+        r: [[-116, 50.3], [-117.8, 49], [-118.2, 47.7], [-119.3, 46.5], [-119.9, 46], [-121.5, 45.7], [-123, 46.2], [-124, 46.25]] },
+      { cat: "river", key: "ち", ans: "ミシシッピ川", at: [-90.6, 34],
+        r: [[-95.2, 47.2], [-93.3, 45], [-91.5, 43.5], [-91, 41.5], [-90.2, 38.6], [-89.2, 37], [-90, 35.1], [-91.1, 33], [-91.4, 31], [-90.1, 29.95], [-89.3, 29.1]] },
+      { cat: "river", key: "つ", ans: "セントローレンス川", at: [-69.5, 48.2],
+        r: [[-76.3, 44.2], [-75, 44.9], [-73.6, 45.5], [-72.5, 46.3], [-71.2, 46.8], [-70, 47.5], [-68.5, 48.5], [-66.5, 49.3]] },
+      { cat: "water", key: "て", ans: "スペリオル湖", at: [-87.5, 47.7] },
+      { cat: "water", key: "と", ans: "ミシガン湖", at: [-87, 43.8] },
+      { cat: "water", key: "な", ans: "ヒューロン湖", at: [-82.3, 44.9] },
+      { cat: "water", key: "に", ans: "エリー湖", at: [-81.2, 42.2] },
+      { cat: "water", key: "ぬ", ans: "オンタリオ湖", at: [-77.8, 43.6] },
+      { cat: "question", key: "問", ans: "ウ 氷河の侵食",
+        q: "い湾やて〜ぬの湖は、何の影響でできた地形？　ア プレート運動　イ 沿岸流や河川の侵食　ウ 氷河の侵食" },
+
+      { cat: "country", key: "A", ans: "アメリカ合衆国", at: [-98, 39], country: "United States of America" },
+      { cat: "country", key: "B", ans: "カナダ", at: [-105, 58], country: "Canada" },
+      { cat: "country", key: "C", ans: "アラスカ州", at: [-152, 64] },
+      { cat: "country", key: "D", ans: "グリーンランド", at: [-47, 62.5], country: "Greenland" },
+
+      { cat: "city", key: "①", ans: "ワシントンD.C.", at: [-77.04, 38.9] },
+      { cat: "city", key: "②", ans: "ニューヨーク", at: [-74, 40.7] },
+      { cat: "city", key: "③", ans: "ボストン", at: [-71.06, 42.36] },
+      { cat: "city", key: "④", ans: "シカゴ", at: [-87.6, 41.9] },
+      { cat: "city", key: "⑤", ans: "デトロイト", at: [-83, 42.3] },
+      { cat: "city", key: "⑥", ans: "ヒューストン", at: [-95.4, 29.8] },
+      { cat: "city", key: "⑦", ans: "ニューオーリンズ", at: [-90.07, 29.95] },
+      { cat: "city", key: "⑧", ans: "ロサンゼルス", at: [-118.2, 34] },
+      { cat: "city", key: "⑨", ans: "サンフランシスコ", at: [-122.4, 37.8] },
+      { cat: "city", key: "⑩", ans: "バンクーバー", at: [-123.1, 49.3] },
+      { cat: "city", key: "⑪", ans: "オタワ", at: [-75.7, 45.4] },
+      { cat: "city", key: "⑫", ans: "ケベック", at: [-71.2, 46.8] },
+    ],
+  },
+  {
+    id: "latin", title: "⑪ ラテンアメリカ",
+    proj: { type: "geoMercator", extent: [[-118, -56], [-30, 33]] },
+    redLat: [[0, "赤道"]],
+    ctx: [["アメリカ合衆国", -100, 32], ["グアテマラ", -91, 15.3], ["ニカラグア", -85, 12.9], ["ジャマイカ", -77.4, 17.4],
+      ["ハイチ", -72.8, 19.3], ["パラグアイ", -58.2, -22.8],
+      ["太平洋", -100, -15, 1], ["大西洋", -38, 12, 1]],
+    items: [
+      { cat: "line", key: "a)", ans: "西経80°", at: [-80, 28], lon: -80 },
+      { cat: "line", key: "b)", ans: "西経40°", at: [-40, 28], lon: -40 },
+      { cat: "line", key: "c)", ans: "南緯20°", at: [-100, -20], lat: -20 },
+
+      { cat: "mountain", key: "あ", ans: "アンデス山脈", at: [-75.5, -11],
+        m: [[-72, 10], [-75.5, 6], [-77, 2], [-78.5, -2], [-77.5, -8], [-74, -14], [-69.5, -17], [-68.5, -22], [-69, -28], [-70, -33], [-71, -38], [-71.5, -45]] },
+      { cat: "river", key: "い", ans: "アマゾン川", at: [-58, -2.6],
+        r: [[-73.5, -4.5], [-71, -4], [-67, -3.5], [-63, -3.7], [-60, -3.2], [-57, -2.5], [-54.5, -2.4], [-52, -1.5], [-50, -0.5]] },
+      { cat: "river", key: "う", ans: "ラプラタ川", at: [-59.6, -31],
+        r: [[-51, -20], [-54, -24], [-55, -27.3], [-58.5, -27.4], [-59.7, -30], [-60.7, -32.9], [-59, -34], [-58.3, -34.5], [-57, -35.2], [-56, -35.6]] },
+      { cat: "land", key: "え", ans: "メキシコ高原", at: [-102.5, 24], kind: "plateau",
+        a: [[-106, 29], [-103, 28.5], [-100, 25], [-98.5, 21], [-99.5, 19], [-102, 20], [-104.5, 23], [-106.5, 26.5]] },
+      { cat: "land", key: "お", ans: "ブラジル高原", at: [-45, -13], kind: "plateau",
+        a: [[-56, -10], [-48, -6.5], [-40, -5.5], [-36, -7], [-38, -13], [-40, -20], [-45, -23.3], [-51, -28], [-54, -24], [-55, -17]] },
+      { cat: "land", key: "か", ans: "ギアナ高地", at: [-61, 4.5], kind: "plateau",
+        a: [[-66, 6.5], [-62, 7.5], [-58, 7], [-54, 4.5], [-55, 2], [-60, 1.5], [-64, 2.5], [-66, 4]] },
+      { cat: "land", key: "き", ans: "アマゾン盆地", at: [-64, -6.5], kind: "plain",
+        a: [[-74, -2], [-67, 0.5], [-60, 0], [-52, -0.5], [-52, -4], [-58, -6], [-65, -8.5], [-73, -7]] },
+      { cat: "land", key: "く", ans: "アタカマ砂漠", at: [-69.8, -23], kind: "desert",
+        a: [[-70.4, -18], [-69.2, -18.5], [-68.9, -24], [-69.6, -27.5], [-70.9, -27.5], [-70.5, -22]] },
+      { cat: "water", key: "け", ans: "カリブ海", at: [-75, 14.5] },
+      { cat: "peninsula", key: "こ", ans: "西インド諸島", at: [-65, 20.5] },
+      { cat: "peninsula", key: "さ", ans: "ユカタン半島", at: [-89, 19.5] },
+      { cat: "peninsula", key: "し", ans: "パナマ地峡", at: [-79.5, 8.6] },
+      { cat: "peninsula", key: "す", ans: "ガラパゴス諸島", at: [-90.5, -0.6] },
+      { cat: "peninsula", key: "せ", ans: "フォークランド諸島", at: [-59.5, -51.7] },
+      { cat: "water", key: "そ", ans: "マゼラン海峡", at: [-70.5, -53.2] },
+      { cat: "question", key: "問", ans: "ア セルバ",
+        q: "い川の流域は、主にどのような植生？　ア セルバ　イ カンポ　ウ パンパ" },
+
+      { cat: "country", key: "A", ans: "メキシコ", at: [-108.5, 22], country: "Mexico" },
+      { cat: "country", key: "B", ans: "キューバ", at: [-79.5, 21.8], country: "Cuba" },
+      { cat: "country", key: "C", ans: "ドミニカ共和国", at: [-70.4, 18.9], country: "Dominican Rep." },
+      { cat: "country", key: "D", ans: "ベネズエラ", at: [-66, 8], country: "Venezuela" },
+      { cat: "country", key: "E", ans: "コロンビア", at: [-73.5, 3.5], country: "Colombia" },
+      { cat: "country", key: "F", ans: "エクアドル", at: [-78.6, -1.6], country: "Ecuador" },
+      { cat: "country", key: "G", ans: "ペルー", at: [-79.5, -8.5], country: "Peru" },
+      { cat: "country", key: "H", ans: "ボリビア", at: [-63.5, -19], country: "Bolivia" },
+      { cat: "country", key: "I", ans: "チリ", at: [-72.5, -36], country: "Chile" },
+      { cat: "country", key: "J", ans: "ブラジル", at: [-52, -11], country: "Brazil" },
+      { cat: "country", key: "K", ans: "ウルグアイ", at: [-55.8, -32.6], country: "Uruguay" },
+      { cat: "country", key: "L", ans: "アルゼンチン", at: [-64, -35], country: "Argentina" },
+      { cat: "country", key: "M", ans: "パタゴニア地方", at: [-68, -46.5] },
+
+      { cat: "city", key: "①", ans: "メキシコシティ", at: [-99.13, 19.43] },
+      { cat: "city", key: "②", ans: "ラパス", at: [-68.15, -16.5] },
+      { cat: "city", key: "③", ans: "サンティアゴ", at: [-70.67, -33.45] },
+      { cat: "city", key: "④", ans: "リオデジャネイロ", at: [-43.2, -22.9] },
+      { cat: "city", key: "⑤", ans: "サンパウロ", at: [-46.63, -23.55] },
+      { cat: "city", key: "⑥", ans: "ブエノスアイレス", at: [-58.38, -34.6] },
+    ],
+  },
+];
+
+const W = 1000;
+const open = new Set();          // 表示中の項目キー "page/index"
+const state = { page: PAGES[0].id, cat: "all" };
+try { Object.assign(state, JSON.parse(localStorage.getItem("view-america") || "{}")); } catch (e) {}
+if (!PAGES.some(p => p.id === state.page)) state.page = PAGES[0].id;
+
+const $ = s => document.querySelector(s);
+const page = () => PAGES.find(p => p.id === state.page);
+const visible = p => p.items.map((it, i) => ({ ...it, k: `${p.id}/${i}` }))
+  .filter(it => state.cat === "all" || it.cat === state.cat);
+let countries = null;
+
+function save() { try { localStorage.setItem("view-america", JSON.stringify(state)); } catch (e) {} }
+
+function buildMap(p, items) {
+  const [[x0, y0], [x1, y1]] = p.proj.extent;
+  const frame = { type: "MultiPoint", coordinates: [] };
+  for (let i = 0; i <= 10; i++) {
+    const x = x0 + (x1 - x0) * i / 10, y = y0 + (y1 - y0) * i / 10;
+    frame.coordinates.push([x, y0], [x, y1], [x0, y], [x1, y]);
+  }
+  const proj = d3[p.proj.type]();
+  if (p.proj.rotate) proj.rotate(p.proj.rotate);
+  if (p.proj.parallels) proj.parallels(p.proj.parallels);
+  proj.fitWidth(W, frame);
+  const path = d3.geoPath(proj);
+  const H = Math.round(path.bounds(frame)[1][1]);
+  const line = c => path({ type: "LineString", coordinates: c });
+  const hl = new Set(items.filter(it => it.country).map(it => it.country));
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
+  svg += `<path class="grat" d="${path(d3.geoGraticule().step([10, 10])())}"/>`;
+  for (const f of countries.features)
+    svg += `<path class="country ${hl.has(f.properties.name) ? "hl" : ""}" d="${path(f)}"/>`;
+  svg += `<path class="borders" d="${path(countries.borders)}"/><path class="coast" d="${path(countries.land)}"/>`;
+  for (const it of items) {
+    if (!it.a) continue;
+    // 頂点の向きが逆だと「それ以外の全世界」が塗られるので、面積で判定して直す
+    let ring = [...it.a, it.a[0]];
+    if (d3.geoArea({ type: "Polygon", coordinates: [ring] }) > 2 * Math.PI) ring = ring.reverse();
+    svg += `<path class="area ${it.kind}" d="${path({ type: "Polygon", coordinates: [ring] })}"/>`;
+  }
+  for (const [lat] of p.redLat || [])
+    svg += `<path class="meridian solid" d="${line(d3.range(-180, 181, 2).map(x => [x, lat]))}"/>`;
+  for (const it of items) {
+    if (it.m) svg += `<path class="mline" d="${line(it.m)}"/>`;
+    if (it.r) svg += `<path class="river" d="${line(it.r)}"/>`;
+    if (it.c) svg += `<path class="current" d="${line(it.c)}" marker-end="url(#arrow)"/>`;
+    if (it.lon != null) svg += `<path class="meridian" d="${line(d3.range(-80, 81, 2).map(y => [it.lon, y]))}"/>`;
+    if (it.lat != null) svg += `<path class="meridian" d="${line(d3.range(-180, 181, 2).map(x => [x, it.lat]))}"/>`;
+    if (it.cat === "city") { const [cx, cy] = proj(it.at); svg += `<circle class="city" cx="${cx}" cy="${cy}" r="5"/>`; }
+  }
+  svg += `<defs><marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="3" markerHeight="3" orient="auto">
+    <path d="M0,0 L10,5 L0,10 z" fill="#e0453a"/></marker></defs></svg>`;
+
+  const pct = ([lon, lat]) => { const [x, y] = proj([lon, lat]); return `left:${x / W * 100}%;top:${y / H * 100}%`; };
+  const redLabels = (p.redLat || []).map(([lat, name]) => [name, p.proj.extent[0][0] + 4, lat + 1.6]);
+  let overlay = redLabels.map(([name, lon, lat]) =>
+    `<span class="ctx red" style="${pct([lon, lat])}">${name}</span>`).join("") + p.ctx.map(([name, lon, lat, sea]) =>
+    `<span class="ctx ${sea ? "sea" : ""}" style="${pct([lon, lat])}">${name}</span>`).join("");
+  for (const it of items) {
+    if (!it.at) continue;
+    overlay += `<button class="pin ${it.cat}" data-k="${it.k}" aria-label="${it.key}" style="${pct(it.at)}">
+      <span class="mk">${it.key}</span><span class="bub">${it.ans}</span></button>`;
+  }
+  return `<div class="map">${svg}${overlay}</div>`;
+}
+
+function render() {
+  const p = page();
+  const cats = ["all", ...Object.keys(CATS).filter(c => p.items.some(it => it.cat === c))];
+  if (!cats.includes(state.cat)) state.cat = "all";
+
+  $("#tabs").innerHTML = PAGES.map(q =>
+    `<button class="tab ${q.id === state.page ? "on" : ""}" data-page="${q.id}">${q.title}</button>`).join("");
+  $("#cats").innerHTML = cats.map(c => `<button class="cat ${c === state.cat ? "on" : ""}" data-cat="${c}">${
+    c === "all" ? "すべて" : `<i style="background:${CATS[c].color};border:1px solid #888"></i>${CATS[c].name}`}</button>`).join("");
+
+  const items = visible(p);
+  let lists = "";
+  for (const c of cats.slice(1)) {
+    const g = items.filter(it => it.cat === c);
+    if (!g.length) continue;
+    lists += `<section><h2>${CATS[c].name}<small>${g.length}問</small></h2><div class="grid">`;
+    for (const it of g) {
+      if (it.q) lists += `<div class="q">${it.q}</div>`;
+      lists += `<div class="row" data-k="${it.k}"><span class="key">${it.key}</span>
+        <span class="ans">${it.ans}<span class="cover">タップで表示</span></span></div>`;
+    }
+    lists += `</div></section>`;
+  }
+  $("#main").innerHTML = `${buildMap(p, items)}<p class="hint">地図上の記号をタップすると答えが出ます</p>${lists}`;
+  sync();
+}
+
+function sync() {
+  document.querySelectorAll("[data-k]").forEach(el => el.classList.toggle("open", open.has(el.dataset.k)));
+  const ks = visible(page()).map(it => it.k);
+  $("#count").textContent = `表示中 ${ks.filter(k => open.has(k)).length} / ${ks.length}`;
+}
+
+document.addEventListener("click", e => {
+  const t = e.target.closest("[data-page],[data-cat]");
+  if (t) {
+    if (t.dataset.page) { state.page = t.dataset.page; state.cat = "all"; window.scrollTo(0, 0); }
+    else state.cat = t.dataset.cat;
+    save(); render(); return;
+  }
+  const el = e.target.closest("[data-k]");
+  if (el) { const k = el.dataset.k; open.has(k) ? open.delete(k) : open.add(k); sync(); }
+});
+$("#hideAll").onclick = () => { visible(page()).forEach(it => open.delete(it.k)); sync(); };
+$("#showAll").onclick = () => { visible(page()).forEach(it => open.add(it.k)); sync(); };
+
+fetch("vendor/countries-50m.json").then(r => r.json()).then(world => {
+  const o = world.objects.countries;
+  countries = {
+    features: topojson.feature(world, o).features,
+    borders: topojson.mesh(world, o, (a, b) => a !== b),
+    land: topojson.merge(world, o.geometries),
+  };
+  render();
+});
+</script>
+</body>
+</html>
