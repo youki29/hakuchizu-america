@@ -283,15 +283,19 @@ function buildMap(p, items) {
   if (p.proj.rotate) proj.rotate(p.proj.rotate);
   if (p.proj.parallels) proj.parallels(p.proj.parallels);
   proj.fitWidth(W, frame);
-  const path = d3.geoPath(proj);
+  const path = d3.geoPath(proj).digits(1);
   const H = Math.round(path.bounds(frame)[1][1]);
+  // 枠の外は描かない（世界全体を描くと SVG が巨大になり、iPhone の Safari が落ちる）
+  proj.clipExtent([[-20, -20], [W + 20, H + 20]]).precision(0.5);
   const line = c => path({ type: "LineString", coordinates: c });
   const hl = new Set(items.filter(it => it.country).map(it => it.country));
 
   let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
   svg += `<path class="grat" d="${path(d3.geoGraticule().step([10, 10])())}"/>`;
-  for (const f of countries.features)
-    svg += `<path class="country ${hl.has(f.properties.name) ? "hl" : ""}" d="${path(f)}"/>`;
+  for (const f of countries.features) {
+    const d = path(f);
+    if (d) svg += `<path class="country ${hl.has(f.properties.name) ? "hl" : ""}" d="${d}"/>`;
+  }
   svg += `<path class="borders" d="${path(countries.borders)}"/><path class="coast" d="${path(countries.land)}"/>`;
   for (const it of items) {
     if (!it.a) continue;
