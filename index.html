@@ -39,9 +39,15 @@
   .tools .count { margin-left: auto; font-size: 13px; color: var(--sub); align-self: center; }
   main { max-width: 900px; margin: 0 auto; padding: 12px 16px 60px; }
 
-  .map { position: relative; user-select: none; -webkit-user-select: none; }
-  .map svg { display: block; width: 100%; height: auto; border-radius: 10px; background: var(--sea);
-    box-shadow: 0 1px 4px rgba(0,0,0,.12); }
+  .mapbox { position: relative; overflow: hidden; border-radius: 10px; touch-action: pan-y;
+    box-shadow: 0 1px 4px rgba(0,0,0,.12); background: var(--sea); }
+  .mapbox.zoomed { touch-action: none; cursor: grab; }
+  .map { position: relative; user-select: none; -webkit-user-select: none; transform-origin: 0 0; --iz: 1; }
+  .zoombtns { position: absolute; right: 8px; bottom: 8px; display: flex; flex-direction: column; gap: 6px; z-index: 5; }
+  .zoombtns button { width: 36px; height: 36px; border-radius: 8px; border: 1px solid #bbb; background: rgba(255,255,255,.92);
+    font-size: 20px; font-weight: 700; line-height: 1; color: #333; cursor: pointer; padding: 0; }
+  .zoombtns button.reset { font-size: 11px; }
+  .map svg { display: block; width: 100%; height: auto; background: var(--sea); }
   .country { fill: var(--land); }
   .country.hl { fill: var(--hl); }
   .borders { fill: none; stroke: var(--border); stroke-width: .7; }
@@ -56,18 +62,18 @@
   .meridian.solid { stroke-dasharray: none; stroke-width: 2.4; }
   .city { fill: #fff; stroke: #222; stroke-width: 2; }
 
-  .ctx { position: absolute; transform: translate(-50%, -50%); font-size: clamp(8px, 1.7vw, 13px);
+  .ctx { position: absolute; transform: translate(-50%, -50%) scale(var(--iz)); font-size: clamp(8px, 1.7vw, 13px);
     color: #8a8a8a; white-space: nowrap; pointer-events: none; letter-spacing: .05em; }
   .ctx.red { color: #c0392b; font-weight: 700; }
   .ctx.sea { color: #6d93b3; font-style: italic; }
-  .pin { position: absolute; transform: translate(-50%, -50%); border: none; padding: 0; cursor: pointer;
+  .pin { position: absolute; transform: translate(-50%, -50%) scale(var(--iz)); border: none; padding: 0; cursor: pointer;
     background: transparent; width: clamp(26px, 5vw, 36px); aspect-ratio: 1; }
   .pin .mk { position: absolute; inset: 15%; display: grid; place-items: center; border-radius: 5px;
     background: #fff; border: 1.5px solid #333; color: #222; font-weight: 700;
     font-size: clamp(9px, 1.9vw, 14px); line-height: 1; }
   .pin.country .mk { border-radius: 50%; background: #222; color: #fff; border-color: #222; }
   .pin.city .mk { border-radius: 50%; }
-  .pin.city { margin-left: clamp(12px, 2.6vw, 18px); }
+  .pin.city { margin-left: calc(clamp(12px, 2.6vw, 18px) * var(--iz)); }
   .pin.open .mk { background: #d62828; border-color: #d62828; color: #fff; }
   .pin .bub { position: absolute; left: 50%; top: 88%; transform: translateX(-50%);
     white-space: nowrap; background: rgba(214, 40, 40, .95); color: #fff; z-index: 2;
@@ -323,7 +329,8 @@ function buildMap(p, items) {
     overlay += `<button class="pin ${it.cat}" data-k="${it.k}" aria-label="${it.key}" style="${pct(it.at)}">
       <span class="mk">${it.key}</span><span class="bub">${it.ans}</span></button>`;
   }
-  return `<div class="map">${svg}${overlay}</div>`;
+  return `<div class="mapbox" id="mapbox"><div class="map" id="map">${svg}${overlay}</div>
+    <div class="zoombtns"><button data-zoom="in" aria-label="拡大">＋</button><button data-zoom="out" aria-label="縮小">−</button><button class="reset" data-zoom="reset" aria-label="元の大きさに戻す">戻す</button></div></div>`;
 }
 
 function render() {
@@ -349,9 +356,91 @@ function render() {
     }
     lists += `</div></section>`;
   }
-  $("#main").innerHTML = `${buildMap(p, items)}<p class="hint">地図上の記号をタップすると答えが出ます</p>${lists}`;
+  if (zoom.page !== p.id) { zoom.page = p.id; zoom.z = 1; zoom.x = 0; zoom.y = 0; }
+  $("#main").innerHTML = `${buildMap(p, items)}<p class="hint">地図上の記号をタップすると答えが出ます。2本指で広げるか ＋ で拡大、拡大中は指で動かせます</p>${lists}`;
   sync();
+  applyZoom();
 }
+
+// ===== 拡大・移動 =====
+const zoom = { z: 1, x: 0, y: 0, page: null };
+const ZMAX = 5;
+function applyZoom() {
+  const box = $("#mapbox"), map = $("#map");
+  if (!box || !map) return;
+  const w = box.clientWidth, h = box.clientHeight;
+  zoom.z = Math.min(ZMAX, Math.max(1, zoom.z));
+  zoom.x = Math.min(0, Math.max(w - w * zoom.z, zoom.x));
+  zoom.y = Math.min(0, Math.max(h - h * zoom.z, zoom.y));
+  map.style.transform = `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.z})`;
+  map.style.setProperty("--iz", 1 / zoom.z);
+  box.classList.toggle("zoomed", zoom.z > 1.01);
+}
+function zoomAt(nz, cx, cy) {   // cx, cy は枠の左上からの位置
+  nz = Math.min(ZMAX, Math.max(1, nz));
+  zoom.x = cx - (cx - zoom.x) * nz / zoom.z;
+  zoom.y = cy - (cy - zoom.y) * nz / zoom.z;
+  zoom.z = nz;
+  applyZoom();
+}
+const ptrs = new Map();
+let gesture = null, moved = false;
+function boxPos(e) { const r = $("#mapbox").getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+document.addEventListener("pointerdown", e => {
+  if (!e.target.closest("#mapbox") || e.target.closest(".zoombtns")) return;
+  ptrs.set(e.pointerId, boxPos(e));
+  moved = false;
+  if (ptrs.size === 2) {
+    const [a, b] = [...ptrs.values()];
+    gesture = { type: "pinch", d: Math.hypot(a[0] - b[0], a[1] - b[1]), z: zoom.z, mx: (a[0] + b[0]) / 2, my: (a[1] + b[1]) / 2, x: zoom.x, y: zoom.y };
+  } else if (ptrs.size === 1 && zoom.z > 1.01) {
+    const [p] = ptrs.values();
+    gesture = { type: "pan", sx: p[0], sy: p[1], x: zoom.x, y: zoom.y };
+  }
+});
+document.addEventListener("pointermove", e => {
+  if (!ptrs.has(e.pointerId)) return;
+  ptrs.set(e.pointerId, boxPos(e));
+  if (!gesture) return;
+  if (gesture.type === "pinch" && ptrs.size >= 2) {
+    const [a, b] = [...ptrs.values()];
+    const d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+    const nz = Math.min(ZMAX, Math.max(1, gesture.z * d / gesture.d));
+    const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+    zoom.z = nz;
+    zoom.x = mx - (gesture.mx - gesture.x) * nz / gesture.z;
+    zoom.y = my - (gesture.my - gesture.y) * nz / gesture.z;
+    applyZoom(); moved = true;
+  } else if (gesture.type === "pan") {
+    const [p] = ptrs.values();
+    if (Math.hypot(p[0] - gesture.sx, p[1] - gesture.sy) > 6) moved = true;
+    zoom.x = gesture.x + p[0] - gesture.sx;
+    zoom.y = gesture.y + p[1] - gesture.sy;
+    applyZoom();
+  }
+});
+function endPtr(e) {
+  if (!ptrs.delete(e.pointerId)) return;
+  if (ptrs.size === 1 && zoom.z > 1.01) {
+    const [p] = ptrs.values();
+    gesture = { type: "pan", sx: p[0], sy: p[1], x: zoom.x, y: zoom.y };
+  } else if (ptrs.size === 0) gesture = null;
+}
+document.addEventListener("pointerup", endPtr);
+document.addEventListener("pointercancel", endPtr);
+// 指で動かしたあとは、記号のタップとして扱わない
+document.addEventListener("click", e => { if (moved && e.target.closest("#mapbox")) { e.stopPropagation(); e.preventDefault(); moved = false; } }, true);
+// iPhone の Safari がページ全体を拡大しないようにする（地図の上だけ）
+document.addEventListener("gesturestart", e => { if (e.target.closest && e.target.closest("#mapbox")) e.preventDefault(); });
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-zoom]");
+  if (!b) return;
+  const box = $("#mapbox"), cx = box.clientWidth / 2, cy = box.clientHeight / 2;
+  if (b.dataset.zoom === "in") zoomAt(zoom.z * 1.6, cx, cy);
+  else if (b.dataset.zoom === "out") zoomAt(zoom.z / 1.6, cx, cy);
+  else { zoom.z = 1; zoom.x = 0; zoom.y = 0; applyZoom(); }
+});
+addEventListener("resize", applyZoom);
 
 function sync() {
   document.querySelectorAll("[data-k]").forEach(el => el.classList.toggle("open", open.has(el.dataset.k)));
