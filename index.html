@@ -111,7 +111,7 @@
 <footer>地図データ: <a href="https://www.naturalearthdata.com/">Natural Earth</a></footer>
 
 <script src="vendor/d3.min.js"></script>
-<script src="vendor/topojson-client.min.js"></script>
+<script src="vendor/base.js"></script>
 <script>
 const CATS = {
   country: { name: "国名", color: "#222" },
@@ -268,7 +268,6 @@ const $ = s => document.querySelector(s);
 const page = () => PAGES.find(p => p.id === state.page);
 const visible = p => p.items.map((it, i) => ({ ...it, k: `${p.id}/${i}` }))
   .filter(it => state.cat === "all" || it.cat === state.cat);
-let countries = null;
 
 function save() { try { localStorage.setItem("view-america", JSON.stringify(state)); } catch (e) {} }
 
@@ -284,19 +283,16 @@ function buildMap(p, items) {
   if (p.proj.parallels) proj.parallels(p.proj.parallels);
   proj.fitWidth(W, frame);
   const path = d3.geoPath(proj).digits(1);
-  const H = Math.round(path.bounds(frame)[1][1]);
-  // 枠の外は描かない（世界全体を描くと SVG が巨大になり、iPhone の Safari が落ちる）
+  // 下地（国・海岸線など）は tools/build_base.js で作った vendor/base.js を使う
+  const base = MAPBASE[p.id], H = base.H;
   proj.clipExtent([[-20, -20], [W + 20, H + 20]]).precision(0.5);
   const line = c => path({ type: "LineString", coordinates: c });
   const hl = new Set(items.filter(it => it.country).map(it => it.country));
 
   let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
-  svg += `<path class="grat" d="${path(d3.geoGraticule().step([10, 10])())}"/>`;
-  for (const f of countries.features) {
-    const d = path(f);
-    if (d) svg += `<path class="country ${hl.has(f.properties.name) ? "hl" : ""}" d="${d}"/>`;
-  }
-  svg += `<path class="borders" d="${path(countries.borders)}"/><path class="coast" d="${path(countries.land)}"/>`;
+  let b = base.svg;
+  for (const n of hl) b = b.split(`class="country" data-n="${n}"`).join(`class="country hl" data-n="${n}"`);
+  svg += b;
   for (const it of items) {
     if (!it.a) continue;
     // 頂点の向きが逆だと「それ以外の全世界」が塗られるので、面積で判定して直す
@@ -380,23 +376,11 @@ $("#showAll").onclick = () => { visible(page()).forEach(it => open.add(it.k)); s
 function showMsg(html) { $("#main").innerHTML = `<div class="msg">${html}</div>`; }
 window.addEventListener("error", e => showMsg(`表示中にエラーが起きました。<br><small>${String(e.message || e)}</small><br><button onclick="location.reload()">もう一度読み込む</button>`));
 function load() {
-  showMsg("地図を読み込み中…");
-  if (!window.d3 || !window.topojson) {
-    showMsg(`地図の部品を読み込めませんでした。<br><button onclick="location.reload()">もう一度読み込む</button>`);
+  if (!window.d3 || !window.MAPBASE) {
+    showMsg(`地図の部品を読み込めませんでした。<br>電波のよい所で、もう一度お試しください。<br><button onclick="location.reload()">もう一度読み込む</button>`);
     return;
   }
-  fetch("vendor/countries-50m.json")
-    .then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
-    .then(world => {
-      const o = world.objects.countries;
-      countries = {
-        features: topojson.feature(world, o).features,
-        borders: topojson.mesh(world, o, (a, b) => a !== b),
-        land: topojson.merge(world, o.geometries),
-      };
-      render();
-    })
-    .catch(err => showMsg(`地図データを読み込めませんでした（${String(err.message || err)}）。<br>電波のよい所で、もう一度お試しください。<br><button id="retry">もう一度読み込む</button>`));
+  render();
 }
 document.addEventListener("click", e => { if (e.target.id === "retry") load(); });
 load();
