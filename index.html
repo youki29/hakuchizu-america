@@ -22,6 +22,8 @@
   h1 { font-size: 17px; margin: 0 0 8px; line-height: 1.25; }
   h1 small { display: block; font-size: 11px; font-weight: 700; color: var(--sub); }
   .tabs { display: flex; gap: 6px; }
+  .msg { padding: 40px 16px; text-align: center; color: #555; line-height: 1.8; }
+  .msg button { margin-top: 10px; padding: 8px 16px; border-radius: 8px; border: 1px solid #2f6fde; background: #2f6fde; color: #fff; font: inherit; }
   .tab { flex: 1; padding: 9px 6px; border: 1px solid var(--line); border-radius: 10px;
     background: var(--card); font-size: 14px; font-weight: 600; color: var(--sub); cursor: pointer; }
   .tab.on { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -370,15 +372,30 @@ document.addEventListener("click", e => {
 $("#hideAll").onclick = () => { visible(page()).forEach(it => open.delete(it.k)); sync(); };
 $("#showAll").onclick = () => { visible(page()).forEach(it => open.add(it.k)); sync(); };
 
-fetch("vendor/countries-50m.json").then(r => r.json()).then(world => {
-  const o = world.objects.countries;
-  countries = {
-    features: topojson.feature(world, o).features,
-    borders: topojson.mesh(world, o, (a, b) => a !== b),
-    land: topojson.merge(world, o.geometries),
-  };
-  render();
-});
+// 読み込み中・失敗時に画面で知らせる（真っ白のままにしない）
+function showMsg(html) { $("#main").innerHTML = `<div class="msg">${html}</div>`; }
+window.addEventListener("error", e => showMsg(`表示中にエラーが起きました。<br><small>${String(e.message || e)}</small><br><button onclick="location.reload()">もう一度読み込む</button>`));
+function load() {
+  showMsg("地図を読み込み中…");
+  if (!window.d3 || !window.topojson) {
+    showMsg(`地図の部品を読み込めませんでした。<br><button onclick="location.reload()">もう一度読み込む</button>`);
+    return;
+  }
+  fetch("vendor/countries-50m.json")
+    .then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+    .then(world => {
+      const o = world.objects.countries;
+      countries = {
+        features: topojson.feature(world, o).features,
+        borders: topojson.mesh(world, o, (a, b) => a !== b),
+        land: topojson.merge(world, o.geometries),
+      };
+      render();
+    })
+    .catch(err => showMsg(`地図データを読み込めませんでした（${String(err.message || err)}）。<br>電波のよい所で、もう一度お試しください。<br><button id="retry">もう一度読み込む</button>`));
+}
+document.addEventListener("click", e => { if (e.target.id === "retry") load(); });
+load();
 </script>
 </body>
 </html>
