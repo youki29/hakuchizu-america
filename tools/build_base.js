@@ -27,7 +27,24 @@ for (const p of PAGES) {
   proj.fitWidth(W, frame);
   const H = Math.round(d3.geoPath(proj).bounds(frame)[1][1]);
   proj.clipExtent([[-20, -20], [W + 20, H + 20]]).precision(0.5);
-  const pa = d3.geoPath(proj).digits(1);
+  const raw = d3.geoPath(proj).digits(1);
+  // 前の点から 0.7px 未満の点は捨てる（見た目はほぼ同じで、データが軽くなる。iPhone で落ちないように）
+  const pa = g => {
+    const d = raw(g);
+    if (!d) return d;
+    return d.replace(/M[^MZ]*Z?/g, sub => {
+      const closed = sub.endsWith("Z");
+      const pts = sub.replace(/[MZ]/g, "").split("L").map(t => t.split(",").map(Number));
+      if (pts.length < 4) return sub;
+      const keep = [pts[0]];
+      for (let i = 1; i < pts.length - 1; i++) {
+        const [x, y] = keep[keep.length - 1];
+        if (Math.hypot(pts[i][0] - x, pts[i][1] - y) >= 0.7) keep.push(pts[i]);
+      }
+      keep.push(pts[pts.length - 1]);
+      return "M" + keep.map(q => q.join(",")).join("L") + (closed ? "Z" : "");
+    });
+  };
   let svg = `<path class="grat" d="${pa(d3.geoGraticule().step([10, 10])())}"/>`;
   for (const f of features) {
     const d = pa(f);
